@@ -1,6 +1,7 @@
 import os
 
 import tensorflow as tf
+import json
 
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -183,7 +184,10 @@ LABEL_MAP = dict({
 })
 
 def get_custom_metadata(dataset_metadata_file_path):
-    pass
+    with open(dataset_metadata_file_path, 'r') as fp:
+        metadata = json.load(fp)
+    return metadata['num_cls'], metadata['train_iter'], metadata['lr_stage'], \
+           metadata['anchor'], metadata['class_names'], metadata['label_map']
 
 # -----------------------------------------------------------------
 def get_params(dataset_name, dataset_metadata_file_path=None):

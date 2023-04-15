@@ -192,12 +192,13 @@ def get_custom_metadata(dataset_metadata_file_path):
 # -----------------------------------------------------------------
 def get_params(dataset_name, dataset_metadata_file_path=None):
     if dataset_name not in ['coco', 'pascal']:
-        NUM_CLASSES[dataset_name],
-        TRAIN_ITER[dataset_name],
-        LR_STAGE[dataset_name], 
-        ANCHOR[dataset_name], 
-        YOUR_CUSTOM_CLASSES, 
-        LABEL_MAP[dataset_name] = get_custom_metadata(dataset_metadata_file_path)
+        metadata = get_custom_metadata(dataset_metadata_file_path)
+        NUM_CLASSES[dataset_name] = metadata['num_cls']
+        TRAIN_ITER[dataset_name] = metadata['train_iter']
+        LR_STAGE[dataset_name] = metadata['lr_stage']
+        ANCHOR[dataset_name] = metadata['anchor']
+        YOUR_CUSTOM_CLASSES = metadata['class_names']
+        LABEL_MAP[dataset_name]  = metadata['label_map']
     parser_params = {
         "output_size": IMG_SIZE,
         "proto_out_size": PROTO_OUTPUT_SIZE,

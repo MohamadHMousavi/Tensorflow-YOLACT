@@ -10,7 +10,7 @@ MIXPRECISION = False
 RANDOM_SEED = 1234
 
 # Parser
-NUM_MAX_PAD = 100
+NUM_MAX_PAD = 30
 THRESHOLD_POS = 0.5
 THRESHOLD_NEG = 0.4
 
@@ -27,7 +27,7 @@ LOSS_WEIGHT_BOX = 1.5
 LOSS_WEIGHT_MASK = 6.125
 LOSS_WEIGHT_SEG = 1
 NEG_POS_RATIO = 3
-MAX_MASKS_FOR_TRAIN = 100
+MAX_MASKS_FOR_TRAIN = 50
 
 # Detection
 TOP_K = 200
@@ -101,14 +101,12 @@ COLORS = ((244, 67, 54),
 NUM_CLASSES = dict({
     "coco": 81,
     "pascal": 21,
-    "your_custom_dataset": 0
 })
 
 # Todo Add the training iteration for your dataset
 TRAIN_ITER = dict({
     "coco": 800000,
     "pascal": 120000,
-    "your_custom_dataset": 0
 })
 
 # Todo Design your own learning rate schedule
@@ -125,7 +123,6 @@ LR_STAGE = dict({
                'stages': [60000, 100000],
                'stage_lrs': [1e-3, 1e-4, 1e-5]},
 
-    "your_custom_dataset": {}
 })
 
 # Todo Design your own anchors
@@ -139,8 +136,6 @@ ANCHOR = dict({
                "feature_map_size": [69, 35, 18, 9, 5],
                "aspect_ratio": [1, 0.5, 2],
                "scale": [24 * (4 / 3), 48 * (4 / 3), 96 * (4 / 3), 192 * (4 / 3), 384 * (4 / 3)]},
-
-    "your_custom_dataset": {}
 })
 
 # Todo Add custom dataset label dictionary if you need, look the 'COCO_CLASSES' below as an example
@@ -185,12 +180,20 @@ COCO_LABEL_MAP = {1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8,
 LABEL_MAP = dict({
     "coco": COCO_LABEL_MAP,
     "pascal": None,
-    "your_custom_dataset": None
 })
 
+def get_custom_metadata(dataset_metadata_file_path):
+    pass
 
 # -----------------------------------------------------------------
-def get_params(dataset_name):
+def get_params(dataset_name, dataset_metadata_file_path=None):
+    if dataset_name not in ['coco', 'pascal']:
+        NUM_CLASSES[dataset_name],
+        TRAIN_ITER[dataset_name],
+        LR_STAGE[dataset_name], 
+        ANCHOR[dataset_name], 
+        YOUR_CUSTOM_CLASSES, 
+        LABEL_MAP[dataset_name] = get_custom_metadata(dataset_metadata_file_path)
     parser_params = {
         "output_size": IMG_SIZE,
         "proto_out_size": PROTO_OUTPUT_SIZE,

@@ -5,17 +5,22 @@ from utils.augmentation import SSDAugmentation
 
 
 class Parser(object):
-    def __init__(self, anchor_instance, mode=None, **parser_params):
+    def __init__(self, anchor_instance, mode=None, data_decoder=None, return_original=False, **parser_params):
 
         self._mode = mode
         self._is_training = (mode == "train")
-        self._example_decoder = TfExampleDecoder()
+        if data_decoder is None:
+            self._example_decoder = TfExampleDecoder()
+        else:
+            self._example_decoder = data_decoder
         self._anchor_instance = anchor_instance
         self.output_size = parser_params['output_size']
         self.proto_out_size = parser_params['proto_out_size']
         self.num_max_padding = parser_params['num_max_padding']
         self.matching_params = parser_params['matching_params']
         self.augmentation_params = parser_params['augmentation_params']
+        
+        self.return_original = return_original
 
         if parser_params['label_map'] is not None:
             keys = list(parser_params['label_map'].keys())
@@ -48,23 +53,26 @@ class Parser(object):
         classes = data['gt_classes']
         boxes = data['gt_bboxes']  # [xmin, ymin, xmax, ymax], normalized (0~1)
         masks = data['gt_masks']
-        is_crowds = data['gt_is_crowd']
+
+        # is_crowds = data['gt_is_crowd']
         num_obj = tf.shape(classes)[0]
 
+        
         # return original image for testing augmentation purpose
-        original_img = tf.image.convert_image_dtype(tf.identity(image), tf.float32)
-        original_img = tf.image.resize(original_img, [self.output_size, self.output_size])
+        if self.return_original:
+            original_img = tf.image.convert_image_dtype(tf.identity(image), tf.float32)
+            original_img = tf.image.resize(original_img, [self.output_size, self.output_size])
 
         # if label_map is not none, remapping the class label, ex: COCO datasets
         if self.dict_tensor is not None:
             classes = self.dict_tensor.lookup(classes)
 
-        if mode == 'train':
-            # ignore crowd annotation when training
-            non_crowd_idx = tf.where(tf.logical_not(is_crowds))[:, 0]
-            classes = tf.gather(classes, non_crowd_idx)
-            boxes = tf.gather(boxes, non_crowd_idx)
-            masks = tf.gather(masks, non_crowd_idx)
+        # if mode == 'train':
+        #     # ignore crowd annotation when training
+        #     non_crowd_idx = tf.where(tf.logical_not(is_crowds))[:, 0]
+        #     classes = tf.gather(classes, non_crowd_idx)
+        #     boxes = tf.gather(boxes, non_crowd_idx)
+        #     masks = tf.gather(masks, non_crowd_idx)
 
         # Data Augmentation, Normalization, and Resize
         augmentor = SSDAugmentation(mode=mode, **self.augmentation_params)
@@ -95,9 +103,10 @@ class Parser(object):
             'positiveness': match_positiveness,
             'max_id_for_anchors': max_id_for_anchors,
             'max_gt_for_anchors': max_gt_for_anchors,
-            'num_obj': num_obj,
-            'ori': original_img
+            'num_obj': num_obj
         }
+        if self.return_original:
+            labels['ori'] = original_img
         return image, labels
 
     def _parse_train_data(self, data):

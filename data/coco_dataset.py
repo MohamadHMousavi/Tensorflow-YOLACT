@@ -14,16 +14,19 @@ from data import coco_tfrecord_parser
 
 class ObjectDetectionDataset:
 
-    def __init__(self, dataset_name, tfrecord_dir, anchor_instance, **parser_params):
+    def __init__(self, dataset_name, tfrecord_dir, anchor_instance, data_decoder=None, **parser_params):
         self.dataset_name = dataset_name
         self.tfrecord_dir = tfrecord_dir
         self.anchor_instance = anchor_instance
         self.parser_params = parser_params
+        self.data_decoder = data_decoder
 
-    def get_dataloader(self, subset, batch_size):
+    def get_dataloader(self, subset, batch_size, return_original=False):
         # function for per-element transformation
         parser = coco_tfrecord_parser.Parser(anchor_instance=self.anchor_instance,
                                              mode=subset,
+                                             data_decoder=self.data_decoder,
+                                             return_original=return_original,
                                              **self.parser_params)
         # get tfrecord file names
         filenames = tf.io.matching_files(os.path.join(self.tfrecord_dir, f"{subset}.*"))

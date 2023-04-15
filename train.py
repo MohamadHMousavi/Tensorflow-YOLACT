@@ -7,10 +7,11 @@ import tensorflow as tf
 from absl import app
 from absl import flags
 from absl import logging
-from tensorflow.keras.mixed_precision import experimental as mixed_precision
+from tensorflow.keras import mixed_precision
 
 from config import RANDOM_SEED, get_params, MIXPRECISION
 from data.coco_dataset import ObjectDetectionDataset
+from data.custom_dataloader import DataTFRecorder
 from eval import evaluate
 from loss import loss_yolact
 from utils import learning_rate_schedule
@@ -32,7 +33,7 @@ flags.DEFINE_float('weight_decay', 5 * 1e-4,
                    'weight_decay')
 flags.DEFINE_float('print_interval', 10,
                    'number of iteration between printing loss')
-flags.DEFINE_float('save_interval', 100,
+flags.DEFINE_float('save_interval', 1000,
                    'number of iteration between saving model(checkpoint)')
 
 
@@ -60,8 +61,12 @@ def main(argv):
 
     # using mix precision or not
     if MIXPRECISION:
+        tensor_type = tf.float16
         policy = mixed_precision.Policy('mixed_float16')
-        mixed_precision.set_policy(policy)
+        mixed_precision.set_global_policy(policy)
+    else:
+        tensor_type = tf.float32
+
 
     # get params for model
     train_iter, input_size, num_cls, lrs_schedule_params, loss_params, parser_params, model_params = get_params(
@@ -94,12 +99,14 @@ def main(argv):
     # -----------------------------------------------------------------
     # Creating dataloaders for training and validation
     logging.info("Creating the dataloader from: %s..." % FLAGS.tfrecord_dir)
+    data_decoder = DataTFRecorder()
     dateset = ObjectDetectionDataset(dataset_name=FLAGS.name,
                                      tfrecord_dir=os.path.join(FLAGS.tfrecord_dir, FLAGS.name),
                                      anchor_instance=model.anchor_instance,
+                                     data_decoder=data_decoder,
                                      **parser_params)
     train_dataset = dateset.get_dataloader(subset='train', batch_size=FLAGS.batch_size)
-    valid_dataset = dateset.get_dataloader(subset='val', batch_size=1)
+    valid_dataset = dateset.get_dataloader(subset='test', batch_size=1)
     # count number of valid data for progress bar
     # Todo any better way to do it?
     num_val = 0
@@ -111,11 +118,11 @@ def main(argv):
     logging.info("Initiate the Optimizer and Loss function...")
     optimizer = tf.keras.optimizers.SGD(learning_rate=lr_schedule, momentum=FLAGS.momentum)
     criterion = loss_yolact.YOLACTLoss(**loss_params)
-    train_loss = tf.keras.metrics.Mean('train_loss', dtype=tf.float32)
-    loc = tf.keras.metrics.Mean('loc_loss', dtype=tf.float32)
-    conf = tf.keras.metrics.Mean('conf_loss', dtype=tf.float32)
-    mask = tf.keras.metrics.Mean('mask_loss', dtype=tf.float32)
-    seg = tf.keras.metrics.Mean('seg_loss', dtype=tf.float32)
+    train_loss = tf.keras.metrics.Mean('train_loss', dtype=tensor_type)
+    loc = tf.keras.metrics.Mean('loc_loss', dtype=tensor_type)
+    conf = tf.keras.metrics.Mean('conf_loss', dtype=tensor_type)
+    mask = tf.keras.metrics.Mean('mask_loss', dtype=tensor_type)
+    seg = tf.keras.metrics.Mean('seg_loss', dtype=tensor_type)
     # -----------------------------------------------------------------
 
     # Setup the TensorBoard for better visualization
@@ -172,9 +179,9 @@ def main(argv):
             tf.summary.scalar('Seg loss', seg.result(), step=iterations)
 
         if iterations and iterations % FLAGS.print_interval == 0:
-            tf.print("Iteration {}, LR: {}, Total Loss: {}, B: {},  C: {}, M: {}, S:{} ".format(
+            tf.print("Iteration {}, LR: _, Total Loss: {}, B: {},  C: {}, M: {}, S:{} ".format(
                 iterations,
-                optimizer._decayed_lr(var_dtype=tf.float32),
+                # optimizer._decayed_lr(var_dtype=tf.float32),
                 train_loss.result(),
                 loc.result(),
                 conf.result(),

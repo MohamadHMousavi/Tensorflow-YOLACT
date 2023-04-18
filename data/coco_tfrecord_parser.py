@@ -55,7 +55,6 @@ class Parser(object):
         masks = data['gt_masks']
 
         # is_crowds = data['gt_is_crowd']
-        num_obj = tf.shape(classes)[0]
 
         
         # return original image for testing augmentation purpose
@@ -77,7 +76,7 @@ class Parser(object):
         # Data Augmentation, Normalization, and Resize
         augmentor = SSDAugmentation(mode=mode, **self.augmentation_params)
         image, masks, boxes, classes = augmentor(image, masks, boxes, classes)
-
+        num_obj = tf.shape(classes)[0]
         # matching anchors
         boxes = boxes * self.output_size
         cls_targets, box_targets, max_id_for_anchors, match_positiveness = self._anchor_instance.matching(

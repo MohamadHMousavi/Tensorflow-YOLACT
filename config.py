@@ -218,7 +218,10 @@ def get_params(dataset_name, dataset_metadata_file_path=None):
         },
         "label_map": LABEL_MAP[dataset_name]
     }
-
+    parser_params['augmentation_params']['distort_prob'] = {'prob':[0.3, 0.3, 0.3, 0.3, 0.3]}
+    parser_params['augmentation_params']['exp_prob'] = {'prob':0.3, 'max_expand':1.5}
+    parser_params['augmentation_params']['crop_prob'] = {'prob':0.3, 'min_object_covered':0.5}
+    parser_params['augmentation_params']['mirror_prob'] = {'prob':0.5}
     detection_params = {
         "num_cls": NUM_CLASSES[dataset_name],
         "label_background": 0,

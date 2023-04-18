@@ -45,59 +45,65 @@ class BackbonePreprocess(object):
 
 class RandomBrightness(object):
     # input image range: [0.0 ~ 255.0]
-    def __init__(self, delta=32):
+    def __init__(self, prob=0.5, delta=32):
+        self.prob = prob
         self.delta = delta
 
     def __call__(self, image, masks=None, boxes=None, labels=None):
-        if tf.random.uniform([1]) > 0.5:
+        if tf.random.uniform([1]) < self.prob:
             image = tf.image.random_brightness(image, max_delta=self.delta)
         return image, masks, boxes, labels
 
 
 class RandomContrast(object):
     # input image range: [0.0 ~ 255.0]
-    def __init__(self, lower=0.5, upper=1.5):
+    def __init__(self, prob=0.5, lower=0.5, upper=1.5):
+        self.prob = prob
         self.lower = lower
         self.upper = upper
 
     def __call__(self, image, masks=None, boxes=None, labels=None):
-        if tf.random.uniform([1]) > 0.5:
+        if tf.random.uniform([1]) < self.prob:
             image = tf.image.random_contrast(image, lower=self.lower, upper=self.upper)
         return image, masks, boxes, labels
 
 
 class RandomSaturation(object):
     # input image range: [0 ~ 1]
-    def __init__(self, lower=0.5, upper=1.5):
+    def __init__(self, prob=0.5, lower=0.5, upper=1.5):
+        self.prob = prob
         self.lower = lower
         self.upper = upper
 
     def __call__(self, image, masks=None, boxes=None, labels=None):
-        if tf.random.uniform([1]) > 0.5:
+        if tf.random.uniform([1]) < self.prob:
             image = tf.image.random_saturation(image, lower=self.lower, upper=self.upper)
         return image, masks, boxes, labels
 
 
 class RandomHue(object):
     # input image range: [0.0 ~ 255.0]
-    def __init__(self, delta=0.3):
+    def __init__(self, prob=0.5, delta=0.3):
+        self.prob = prob
         self.delta = delta
 
     def __call__(self, image, masks=None, boxes=None, labels=None):
-        if tf.random.uniform([1]) > 0.5:
+        if tf.random.uniform([1]) < self.prob:
             image = tf.image.random_hue(image, max_delta=self.delta)
         return image, masks, boxes, labels
 
 
 class PhotometricDistort(object):
-    def __init__(self):
+    def __init__(self, prob=0.5):
+        if not isinstance(prob, list):
+            prob = [prob] * 5
         self.actions = [
-            RandomContrast(),
-            RandomSaturation(),
-            RandomHue(),
-            RandomContrast()
+            RandomContrast(prob[0]),
+            RandomSaturation(prob[1]),
+            RandomHue(prob[2]),
+            RandomContrast(prob[3])
         ]
-        self.rand_brightness = RandomBrightness()
+        self.rand_brightness = RandomBrightness(prob[4])
 
     def __call__(self, image, masks, boxes, labels):
         image, masks, boxes, labels = self.rand_brightness(image, masks, boxes, labels)
@@ -114,19 +120,20 @@ class RandomExpand(object):
     From https://github.com/FurkanOM/tf-ssd/blob/734bfd0cd1343b424bfad59c4b8c3cbef4775d86/utils/bbox_utils.py#L178
     """
 
-    def __init__(self):
-        ...
+    def __init__(self, prob=0.5, max_expand=4):
+        self.prob = prob
+        self.max_expand = max_expand
 
     def __call__(self, image, masks, boxes, labels):
         # exapnd the image with probability 0.5
-        if tf.random.uniform([1]) > 0.5:
+        if tf.random.uniform([1]) > self.prob:
             return image, masks, boxes, labels
 
         height = tf.cast(tf.shape(image)[0], tf.float32)
         width = tf.cast(tf.shape(image)[1], tf.float32)
 
         # expand 4 times at most
-        expansion_ratio = tf.random.uniform((), minval=1, maxval=4, dtype=tf.float32)
+        expansion_ratio = tf.random.uniform((), minval=1, maxval=self.max_expand, dtype=tf.float32)
         final_height, final_width = tf.round(height * expansion_ratio), tf.round(width * expansion_ratio)
         pad_left = tf.round(tf.random.uniform((), minval=0, maxval=final_width - width, dtype=tf.float32))
         pad_top = tf.round(tf.random.uniform((), minval=0, maxval=final_height - height, dtype=tf.float32))
@@ -153,8 +160,10 @@ class RandomExpand(object):
 
 # Todo I did a slightly different way for crop
 class RandomSampleCrop(object):
-    def __init__(self):
+    def __init__(self, prob=0.5, min_object_covered=0.2):
         # if 0.01 means random crop image, if 2.0 means use original
+        self.prob = prob
+        self.min_object_covered = min_object_covered
         self.overlaps = tf.constant([0.01, 0.1, 0.3, 0.5, 0.7, 0.9, 2.0], dtype=tf.float32)
 
     def __call__(self, image, masks, boxes, labels):
@@ -162,7 +171,7 @@ class RandomSampleCrop(object):
         # i = tf.random.uniform((), minval=0, maxval=tf.shape(self.overlaps)[0], dtype=tf.int32)
         # if self.overlaps[i] == 2.0:
         #     return image, masks, boxes, labels
-        if tf.random.uniform([1]) > 0.5:
+        if tf.random.uniform([1]) > self.prob:
             return image, masks, boxes, labels
         # Geometric Distortions (img, bbox, mask)
         # boxes = tf.clip_by_value(boxes, clip_value_min=0, clip_value_max=1)  # just in case
@@ -172,7 +181,7 @@ class RandomSampleCrop(object):
         bbox_begin, bbox_size, distort_bbox = tf.image.sample_distorted_bounding_box(
             tf.shape(image),
             bounding_boxes=tf.expand_dims(boxes, 0),
-            min_object_covered=0.1,
+            min_object_covered=self.min_object_covered,
             aspect_ratio_range=(0.5, 2.0),
             max_attempts=30)
 
@@ -207,12 +216,12 @@ class RandomSampleCrop(object):
 
 class RandomMirror(object):
     # bbox [xmin, ymin, xmax, ymax]
-    def __int__(self):
-        ...
+    def __init__(self, prob=0.5):
+        self.prob = prob
 
     def __call__(self, image, masks, boxes, labels=None):
         # random mirroring with probability 0.5
-        if tf.random.uniform([1]) > 0.5:
+        if tf.random.uniform([1]) < self.prob:
             image = tf.image.flip_left_right(image)
             masks = tf.image.flip_left_right(tf.expand_dims(masks, -1))
             boxes = tf.stack([1 - boxes[:, 2], boxes[:, 1],
@@ -267,14 +276,20 @@ class Resize(object):
 
 class SSDAugmentation(object):
     def __init__(self, mode, preprocess_func, mean, std, output_size, proto_output_size, discard_box_width,
-                 discard_box_height):
+                 discard_box_height, **aug_arg_dict):
         if mode == 'train':
+            kwargs = [0.5] * 4
+            prob_keys = ['distort_prob', 'exp_prob', 'crop_prob', 'mirror_prob']
+            for i, k in enumerate(prob_keys):
+                if k in aug_arg_dict:
+                    kwargs[i] = aug_arg_dict[k]
+            
             self.augmentations = Compose([
                 ConvertFromInts(),
-                PhotometricDistort(),
-                RandomExpand(),
-                RandomSampleCrop(),
-                RandomMirror(),
+                PhotometricDistort(**kwargs[0]),
+                RandomExpand(**kwargs[1]),
+                RandomSampleCrop(**kwargs[2]),
+                RandomMirror(**kwargs[3]),
                 Resize(output_size, proto_output_size, discard_box_width, discard_box_height),
                 BackbonePreprocess(preprocess_func)
             ])

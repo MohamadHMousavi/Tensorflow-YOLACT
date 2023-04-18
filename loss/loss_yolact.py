@@ -197,7 +197,7 @@ class YOLACTLoss(object):
             # create empty ground truth (138, 138, num_cls)
             seg_gt = tf.zeros_like(seg)
             seg_gt = tf.transpose(seg_gt, perm=(2, 0, 1))
-            seg_gt = tf.tensor_scatter_nd_add(seg_gt, indices=obj_cls, updates=obj_mask)
+            seg_gt = tf.tensor_scatter_nd_add(seg_gt, indices=obj_cls - 1, updates=obj_mask)
             seg_gt = tf.transpose(seg_gt, perm=(1, 2, 0))
             loss_seg += tf.reduce_sum(tf.nn.sigmoid_cross_entropy_with_logits(seg_gt, seg))
         loss_seg = loss_seg / tf.cast(seg_shape, pred_seg.dtype) ** 2 / tf.cast(num_batch, pred_seg.dtype)

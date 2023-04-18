@@ -25,7 +25,7 @@ flags.DEFINE_string('tfrecord_dir', 'data',
                     'directory of tfrecord')
 flags.DEFINE_string('weights', 'weights',
                     'path to store weights')
-flags.DEFINE_integer('batch_size', 3,
+flags.DEFINE_integer('batch_size', 8,
                      'batch size')
 flags.DEFINE_float('momentum', 0.9,
                    'momentum')
@@ -36,23 +36,62 @@ flags.DEFINE_float('print_interval', 10,
 flags.DEFINE_float('save_interval', 1000,
                    'number of iteration between saving model(checkpoint)')
 
+def get_train_step(mixed=False):
+    
+    @tf.function
+    def train_step(model,
+                loss_fn,
+                metrics,
+                optimizer,
+                image,
+                labels,
+                num_cls):
+        # training using tensorflow gradient tape
+        with tf.GradientTape() as tape:
+            output = model(image, training=True)
+            loc_loss, conf_loss, mask_loss, seg_loss, total_loss = loss_fn(output, labels, num_cls)
+        grads = tape.gradient(total_loss, model.trainable_variables)
+        optimizer.apply_gradients(zip(grads, model.trainable_variables))
+        metrics.update_state(total_loss)
+        return loc_loss, conf_loss, mask_loss, seg_loss
 
-@tf.function
-def train_step(model,
-               loss_fn,
-               metrics,
-               optimizer,
-               image,
-               labels,
-               num_cls):
-    # training using tensorflow gradient tape
-    with tf.GradientTape() as tape:
-        output = model(image, training=True)
-        loc_loss, conf_loss, mask_loss, seg_loss, total_loss = loss_fn(output, labels, num_cls)
-    grads = tape.gradient(total_loss, model.trainable_variables)
-    optimizer.apply_gradients(zip(grads, model.trainable_variables))
-    metrics.update_state(total_loss)
-    return loc_loss, conf_loss, mask_loss, seg_loss
+
+    @tf.function
+    def train_step_mixed_precision(model,
+                                loss_fn,
+                                metrics,
+                                optimizer,
+                                image,
+                                labels,
+                                num_cls):
+        # training using tensorflow gradient tape
+        with tf.GradientTape() as tape:
+            output = model(image, training=True)
+            loc_loss, conf_loss, mask_loss, seg_loss, total_loss = loss_fn(output, labels, num_cls)
+            scaled_loss = optimizer.get_scaled_loss(total_loss)
+        
+        scaled_gradients = tape.gradient(scaled_loss, model.trainable_variables)
+        grads = optimizer.get_unscaled_gradients(scaled_gradients)
+        optimizer.apply_gradients(zip(grads, model.trainable_variables))
+        
+        metrics.update_state(total_loss)
+        return loc_loss, conf_loss, mask_loss, seg_loss
+
+
+    if mixed:
+        return train_step_mixed_precision
+    else:
+        return train_step
+
+
+def get_lr(optimizer):
+    if hasattr(optimizer, '_decayed_lr'):
+        return optimizer._decayed_lr(var_dtype=tf.float32)
+    elif hasattr(optimizer, 'optimizer'):
+        return get_lr(optimizer.optimizer)
+    else:
+        return 'could not find lr'
+
 
 
 def main(argv):
@@ -67,6 +106,7 @@ def main(argv):
     else:
         tensor_type = tf.float32
 
+    train_step = get_train_step(MIXPRECISION)
 
     # get params for model
     train_iter, input_size, num_cls, lrs_schedule_params, loss_params, parser_params, model_params = get_params(
@@ -116,7 +156,9 @@ def main(argv):
     # Choose the Optimizor, Loss Function, and Metrics, learning rate schedule
     lr_schedule = learning_rate_schedule.Yolact_LearningRateSchedule(**lrs_schedule_params)
     logging.info("Initiate the Optimizer and Loss function...")
-    optimizer = tf.keras.optimizers.SGD(learning_rate=lr_schedule, momentum=FLAGS.momentum)
+    optimizer = tf.keras.optimizers.SGD(learning_rate=lr_schedule, momentum=FLAGS.momentum)    
+    if MIXPRECISION:
+        optimizer = tf.keras.mixed_precision.LossScaleOptimizer(optimizer)
     criterion = loss_yolact.YOLACTLoss(**loss_params)
     train_loss = tf.keras.metrics.Mean('train_loss', dtype=tensor_type)
     loc = tf.keras.metrics.Mean('loc_loss', dtype=tensor_type)
@@ -179,9 +221,9 @@ def main(argv):
             tf.summary.scalar('Seg loss', seg.result(), step=iterations)
 
         if iterations and iterations % FLAGS.print_interval == 0:
-            tf.print("Iteration {}, LR: _, Total Loss: {}, B: {},  C: {}, M: {}, S:{} ".format(
+            tf.print("Iteration {}, LR: {}, Total Loss: {}, B: {},  C: {}, M: {}, S:{} ".format(
                 iterations,
-                # optimizer._decayed_lr(var_dtype=tf.float32),
+                get_lr(optimizer),
                 train_loss.result(),
                 loc.result(),
                 conf.result(),

@@ -106,6 +106,13 @@ class Yolact(tf.keras.Model):
         pred_offset = tf.concat(pred_offset, axis=1)
         pred_mask_coef = tf.concat(pred_mask_coef, axis=1)
 
+        pred_cls = tf.keras.layers.Activation('linear', dtype='float32')(pred_cls)
+        pred_offset = tf.keras.layers.Activation('linear', dtype='float32')(pred_offset)
+        pred_mask_coef = tf.keras.layers.Activation('linear', dtype='float32')(pred_mask_coef)
+        protonet_out = tf.keras.layers.Activation('linear', dtype='float32')(protonet_out)
+        seg = tf.keras.layers.Activation('linear', dtype='float32')(seg)
+
+
         outs = {
             'pred_cls': pred_cls,
             'pred_offset': pred_offset,

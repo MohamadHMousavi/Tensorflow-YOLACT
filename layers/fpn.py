@@ -12,7 +12,6 @@ class FeaturePyramidNeck(tf.keras.layers.Layer):
     def __init__(self, num_fpn_filters):
         super(FeaturePyramidNeck, self).__init__()
         self.upSample = tf.keras.layers.UpSampling2D(2)
-
         # no Relu for downsample layer
         self.downSample1 = tf.keras.layers.Conv2D(num_fpn_filters, 3, 2, "same")
         self.downSample2 = tf.keras.layers.Conv2D(num_fpn_filters, 3, 2, "same")
@@ -48,4 +47,7 @@ class FeaturePyramidNeck(tf.keras.layers.Layer):
 
     def _resize_and_add(self, f1, f2):
         _, h, w, _ = f2.shape
-        return tf.image.resize(f1, (h, w), method=ResizeMethod.BILINEAR, preserve_aspect_ratio=False) + f2
+        f1 = tf.image.resize(f1, (h, w), method=ResizeMethod.BILINEAR, preserve_aspect_ratio=False)
+        f1 = tf.keras.layers.Activation('linear')(f1)
+        return f1 + f2
+
